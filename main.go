@@ -76,12 +76,20 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	token, err := CreateToken(user.ID)
+	ts, err := CreateToken(user.ID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, token)
+	saveErr := CreateAuth(user.ID, ts)
+	if saveErr != nil {
+		c.JSON(http.StatusUnprocessableEntity, saveErr.Error())
+	}
+	tokens := map[string]string{
+		"access_token": ts.AccessToken,
+		"refresh_token": ts.RefreshToken,
+	}
+	c.JSON(http.StatusOK, tokens)
 }
 
 
@@ -123,7 +131,7 @@ func CreateToken(userid uint64) (*TokenDetails, error) {
 }
 
 
-// Save JWTs metadat in Redis
+// Save JWTs metadata in Redis
 func CreateAuth(userid uint64, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0)	// converts Unix to UTC
 	rt := time.Unix(td.RtExpires, 0)
