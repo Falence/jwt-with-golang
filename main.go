@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -43,6 +44,24 @@ var user = User{
 }
 
 
+var client *redis.Client
+
+func init() {
+	// Initializing Redis
+	dsn := os.Getenv("REDIS_DSN")
+	if len(dsn) == 0 {
+		dsn = "localhost:6379"
+	}
+	client = redis.NewClient(&redis.Options{
+		Addr: dsn, // redis port
+	})
+	_, err := client.Ping().Result()
+	if err != nil {
+		panic(err)
+	}
+}
+
+
 func Login(c *gin.Context) {
 	var u User
 	// Get JSON body and store in u
@@ -64,6 +83,7 @@ func Login(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, token)
 }
+
 
 func CreateToken(userid uint64) (*TokenDetails, error) {
 	td := &TokenDetails{}
@@ -103,21 +123,21 @@ func CreateToken(userid uint64) (*TokenDetails, error) {
 }
 
 
-var client *redis.Client
+// Save JWTs metadat in Redis
+func CreateAuth(userid uint64, td *TokenDetails) error {
+	at := time.Unix(td.AtExpires, 0)	// converts Unix to UTC
+	rt := time.Unix(td.RtExpires, 0)
+	now := time.Now()
 
-func init() {
-	// Initializing Redis
-	dsn := os.Getenv("REDIS_DSN")
-	if len(dsn) == 0 {
-		dsn = "localhost:6379"
+	errAccess := client.Set(td.AccessUuid, strconv.Itoa(int(userid)), at.Sub(now)).Err()
+	if errAccess != nil {
+		return errAccess
 	}
-	client = redis.NewClient(&redis.Options{
-		Addr: dsn, // redis port
-	})
-	_, err := client.Ping().Result()
-	if err != nil {
-		panic(err)
+	errRefresh := client.Set(td.RefreshUuid, strconv.Itoa(int(userid)), rt.Sub(now)).Err()
+	if errRefresh != nil {
+		return errRefresh
 	}
+	return nil
 }
 
 
