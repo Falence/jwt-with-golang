@@ -9,6 +9,8 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v7"
+	"github.com/twinj/uuid"
 )
 
 var (
@@ -69,6 +71,24 @@ func CreateToken(userid uint64) (string, error) {
 		return "", err
 	}
 	return token, nil
+}
+
+
+var client *redis.Client
+
+func init() {
+	// Initializing Redis
+	dsn := os.Getenv("REDIS_DSN")
+	if len(dsn) == 0 {
+		dsn = "localhost:6379"
+	}
+	client = redis.NewClient(&redis.Options{
+		Addr: dsn, // redis port
+	})
+	_, err := client.Ping().Result()
+	if err != nil {
+		panic(err)
+	}
 }
 
 
