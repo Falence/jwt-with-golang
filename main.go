@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	// "encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +19,7 @@ type User struct {
 	ID uint64 `json:"id"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Phone string `json:"phone"`
 }
 
 // Creating a sample user for use
@@ -26,6 +27,7 @@ var user = User{
 	ID: 1,
 	Username: "username",
 	Password: "password",
+	Phone: "680429978",
 }
 
 
@@ -61,7 +63,7 @@ func CreateToken(userid uint64) (string, error) {
 	atClaims["exp"] = time.Now().Add(time.Minute * 15).Unix()
 
 	// Create the Access Token
-	at := jwt.NewWithClaims(jwt.SigningMethodES256, atClaims)
+	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
 	token, err := at.SignedString([]byte(os.Getenv("ACCESS_SECRET")))
 	if err != nil {
 		return "", err
