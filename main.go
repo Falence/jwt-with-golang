@@ -59,6 +59,7 @@ var user = User{
 func main() {
 	router.POST("/login", Login)
 	router.POST("/todo", CreateTodo)
+	router.POST("/logout", Logout)
 
 	log.Fatal(router.Run(":8080"))
 }
@@ -119,6 +120,20 @@ func CreateTodo(c *gin.Context) {
 	c.JSON(http.StatusCreated, td)
 }
 
+func Logout(c *gin.Context) {
+	au, err := ExtractTokenMetadata(c.Request)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	deleted, delErr := DeleteAuth(au.AccessUuid)
+	if delErr != nil || deleted == 0 { // if any goes wrong
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	c.JSON(http.StatusOK, "Sucessfully logged out")
+}
+
 
 // Initializing Redis
 func init() {
@@ -134,7 +149,6 @@ func init() {
 		panic(err)
 	}
 }
-
 
 // Create Access Token and Refresh Token
 func CreateToken(userid uint64) (*TokenDetails, error) {
@@ -174,7 +188,6 @@ func CreateToken(userid uint64) (*TokenDetails, error) {
 	return td, nil
 }
 
-
 // Save JWTs metadata to Redis
 func CreateAuth(userid uint64, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0)	// converts Unix to UTC
@@ -191,7 +204,6 @@ func CreateAuth(userid uint64, td *TokenDetails) error {
 	}
 	return nil
 }
-
 
 func ExtractToken(r *http.Request) string {
 	bearToken := r.Header.Get("Authorization")
