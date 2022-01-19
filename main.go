@@ -58,8 +58,8 @@ var user = User{
 
 func main() {
 	router.POST("/login", Login)
-	router.POST("/todo", CreateTodo)
-	router.POST("/logout", Logout)
+	router.POST("/todo", TokenAuthMiddleware(), CreateTodo)
+	router.POST("/logout", TokenAuthMiddleware(), Logout)
 
 	log.Fatal(router.Run(":8080"))
 }
@@ -135,6 +135,20 @@ func Logout(c *gin.Context) {
 }
 
 
+// MIDDLEWARES
+func TokenAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		err := TokenValid(c.Request)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err.Error())
+			c.Abort()
+			return
+		}
+	}
+}
+
+
+// OTHER FUNCTIONS
 // Initializing Redis
 func init() {
 	dsn := os.Getenv("REDIS_DSN")
