@@ -2,10 +2,12 @@ package main
 
 import (
 	// "encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -34,6 +36,11 @@ type TokenDetails struct {
 	RtExpires int64
 }
 
+type Todo struct {
+	UserID uint16 `json:"user_id"`
+	Title string `json:"title"`
+}
+
 
 // Creating a sample user for use
 var user = User{
@@ -46,8 +53,8 @@ var user = User{
 
 var client *redis.Client
 
+// Initializing Redis
 func init() {
-	// Initializing Redis
 	dsn := os.Getenv("REDIS_DSN")
 	if len(dsn) == 0 {
 		dsn = "localhost:6379"
@@ -61,7 +68,7 @@ func init() {
 	}
 }
 
-
+// Login Handler
 func Login(c *gin.Context) {
 	var u User
 	// Get JSON body and store in u
@@ -93,6 +100,7 @@ func Login(c *gin.Context) {
 }
 
 
+// Create Access Token and Refresh Token
 func CreateToken(userid uint64) (*TokenDetails, error) {
 	td := &TokenDetails{}
 	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
@@ -131,7 +139,7 @@ func CreateToken(userid uint64) (*TokenDetails, error) {
 }
 
 
-// Save JWTs metadata in Redis
+// Save JWTs metadata to Redis
 func CreateAuth(userid uint64, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0)	// converts Unix to UTC
 	rt := time.Unix(td.RtExpires, 0)
@@ -144,6 +152,42 @@ func CreateAuth(userid uint64, td *TokenDetails) error {
 	errRefresh := client.Set(td.RefreshUuid, strconv.Itoa(int(userid)), rt.Sub(now)).Err()
 	if errRefresh != nil {
 		return errRefresh
+	}
+	return nil
+}
+
+
+func ExtractToken(r *http.Request) string {
+	bearToken := r.Header.Get("Authorization")
+	strArr := strings.Split(bearToken, " ")
+	if len(strArr) == 2 {
+		return strArr[1]
+	}
+	return ""
+}
+
+func VerifyToken(r *http.Request) (*jwt.Token, error) {
+	tokenString := ExtractToken(r)
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Make sure that the token method conforms to "SigningMethodHMAC"
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(os.Getenv("ACCESS_SECRET")), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+func TokenValid(r *http.Request) error {
+	token, err := VerifyToken(r)
+	if err != nil {
+		return err
+	}
+	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+		return err
 	}
 	return nil
 }
