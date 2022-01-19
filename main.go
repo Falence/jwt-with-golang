@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -37,7 +36,7 @@ type TokenDetails struct {
 }
 
 type Todo struct {
-	UserID uint16 `json:"user_id"`
+	UserID uint64 `json:"user_id"`
 	Title string `json:"title"`
 }
 
@@ -93,7 +92,7 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	saveErr := CreateAuth(user.ID, ts)
+	saveErr := CreateAuth(user.ID, ts)	// cache with redis
 	if saveErr != nil {
 		c.JSON(http.StatusUnprocessableEntity, saveErr.Error())
 	}
@@ -221,7 +220,7 @@ func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 	return nil, err
 }
 
-// Lookup the token metadata in Redis
+// Lookup the token metadata in Redis and fetch the data
 func FetchAuth(authD *AccessDetails) (uint64, error) {
 	userid, err := client.Get(authD.AccessUuid).Result()
 	if err != nil {
@@ -232,8 +231,36 @@ func FetchAuth(authD *AccessDetails) (uint64, error) {
 }
 
 
+func CreateTodo(c *gin.Context) {
+	var td *Todo
+	if err := c.ShouldBindJSON(&td); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "invalid json")
+		return
+	}
+
+	tokenAuth, err := ExtractTokenMetadata(c.Request)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "unauthorized")
+		return
+	}
+
+	userId, err := FetchAuth(tokenAuth)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "unauthorized")
+		return
+	}
+	td.UserID = userId
+
+	// You can proceed to save the Todo to a DB
+	// but we will return it to the caller her:
+	c.JSON(http.StatusCreated, td)
+}
+
+
 
 func main() {
 	router.POST("/login", Login)
+	router.POST("/todo", CreateTodo)
+
 	log.Fatal(router.Run(":8080"))
 }
