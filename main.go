@@ -230,6 +230,15 @@ func FetchAuth(authD *AccessDetails) (uint64, error) {
 	return userID, nil
 }
 
+// Delete JWT metadata from redis store
+func DeleteAuth(givenUuid string) (int64, error) {
+	deleted, err := client.Del(givenUuid).Result()
+	if err != nil {
+		return 0, err
+	}
+	return deleted, nil
+}
+
 
 func CreateTodo(c *gin.Context) {
 	var td *Todo
