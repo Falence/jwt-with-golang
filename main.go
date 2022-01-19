@@ -17,6 +17,7 @@ import (
 
 var (
 	router = gin.Default()
+	client *redis.Client
 )
 
 type User struct {
@@ -55,24 +56,14 @@ var user = User{
 }
 
 
-var client *redis.Client
+func main() {
+	router.POST("/login", Login)
+	router.POST("/todo", CreateTodo)
 
-// Initializing Redis
-func init() {
-	dsn := os.Getenv("REDIS_DSN")
-	if len(dsn) == 0 {
-		dsn = "localhost:6379"
-	}
-	client = redis.NewClient(&redis.Options{
-		Addr: dsn, // redis port
-	})
-	_, err := client.Ping().Result()
-	if err != nil {
-		panic(err)
-	}
+	log.Fatal(router.Run(":8080"))
 }
 
-// Login Handler
+// HANDLERS
 func Login(c *gin.Context) {
 	var u User
 	// Get JSON body and store in u
@@ -101,6 +92,47 @@ func Login(c *gin.Context) {
 		"refresh_token": ts.RefreshToken,
 	}
 	c.JSON(http.StatusOK, tokens)
+}
+
+func CreateTodo(c *gin.Context) {
+	var td *Todo
+	if err := c.ShouldBindJSON(&td); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "invalid json")
+		return
+	}
+
+	tokenAuth, err := ExtractTokenMetadata(c.Request)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "unauthorized")
+		return
+	}
+
+	userId, err := FetchAuth(tokenAuth)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "unauthorized")
+		return
+	}
+	td.UserID = userId
+
+	// You can proceed to save the Todo to a DB
+	// but we will return it to the caller her:
+	c.JSON(http.StatusCreated, td)
+}
+
+
+// Initializing Redis
+func init() {
+	dsn := os.Getenv("REDIS_DSN")
+	if len(dsn) == 0 {
+		dsn = "localhost:6379"
+	}
+	client = redis.NewClient(&redis.Options{
+		Addr: dsn, // redis port
+	})
+	_, err := client.Ping().Result()
+	if err != nil {
+		panic(err)
+	}
 }
 
 
@@ -240,36 +272,3 @@ func DeleteAuth(givenUuid string) (int64, error) {
 }
 
 
-func CreateTodo(c *gin.Context) {
-	var td *Todo
-	if err := c.ShouldBindJSON(&td); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, "invalid json")
-		return
-	}
-
-	tokenAuth, err := ExtractTokenMetadata(c.Request)
-	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, "unauthorized")
-		return
-	}
-
-	userId, err := FetchAuth(tokenAuth)
-	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, "unauthorized")
-		return
-	}
-	td.UserID = userId
-
-	// You can proceed to save the Todo to a DB
-	// but we will return it to the caller her:
-	c.JSON(http.StatusCreated, td)
-}
-
-
-
-func main() {
-	router.POST("/login", Login)
-	router.POST("/todo", CreateTodo)
-
-	log.Fatal(router.Run(":8080"))
-}
